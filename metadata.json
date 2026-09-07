@@ -1,0 +1,6 @@
+{
+  "name": "Squeeze It",
+  "description": "Scan a product URL and squeeze it into the smallest testable MVP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
