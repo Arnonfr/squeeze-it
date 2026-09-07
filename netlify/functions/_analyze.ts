@@ -150,7 +150,7 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
   if (!apiKey) throw new Error('OPENROUTER_API_KEY לא הוגדר בשרת.');
   const { finalUrl, html } = await fetchPage(rawUrl);
   const signals = extractPageSignals(html, finalUrl);
-  const model = process.env.OPENROUTER_MODEL || '~openai/gpt-latest';
+  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-5';
 
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -174,8 +174,6 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
         },
       ],
       response_format: { type: 'json_schema', json_schema: { name: 'minimum_mvp_brief', strict: true, schema: resultSchema } },
-      provider: { require_parameters: true },
-      temperature: 0.2,
       max_completion_tokens: 2200,
     }),
   });
