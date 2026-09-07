@@ -2,12 +2,18 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { animate, useReducedMotion } from 'framer-motion';
 import * as THREE from 'three';
-import { Check, ExternalLink, RotateCcw, Scissors, Target } from 'lucide-react';
+import { Check, ExternalLink, RotateCcw, Scissors, Target, X } from 'lucide-react';
 import { CylinderHalf } from './CylinderHalf';
 import { createTextTexture } from './textureUtils';
 import type { ApiError, MvpBrief } from './types';
 
 type Stage = 'closed' | 'open' | 'squeezing' | 'done';
+
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 
 function TextCylinder({ texture, scaleX, rotationY }: {
   texture: THREE.Texture;
@@ -15,8 +21,13 @@ function TextCylinder({ texture, scaleX, rotationY }: {
   rotationY: React.MutableRefObject<number>;
 }) {
   return <>
+    <div className="cylinder cylinder--back" aria-hidden="true">
+      <Canvas camera={{ position: [0, 0, 10], fov: 39 }} gl={{ alpha: true, antialias: true }}>
+        <CylinderHalf side="back" texture={texture} scaleX={scaleX} rotationY={rotationY} />
+      </Canvas>
+    </div>
     <div className="cylinder cylinder--front" aria-hidden="true">
-      <Canvas camera={{ position: [0, 0, 10], fov: 39 }} gl={{ alpha: true, antialias: true, localClippingEnabled: true }}>
+      <Canvas camera={{ position: [0, 0, 10], fov: 39 }} gl={{ alpha: true, antialias: true }}>
         <CylinderHalf side="front" texture={texture} scaleX={scaleX} rotationY={rotationY} />
       </Canvas>
     </div>
@@ -86,6 +97,8 @@ export default function App() {
   const squeeze = async (event: FormEvent) => {
     event.preventDefault();
     if (!url.trim() || stage === 'squeezing') return;
+    const normalizedUrl = normalizeUrl(url);
+    setUrl(normalizedUrl);
     setError('');
     setResult(null);
     setStage('squeezing');
@@ -93,14 +106,14 @@ export default function App() {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: normalizedUrl }),
       });
       const data = await response.json() as MvpBrief | ApiError;
-      if (!response.ok || 'error' in data) throw new Error('error' in data ? data.error : 'הניתוח נכשל.');
+      if (!response.ok || 'error' in data) throw new Error('error' in data ? data.error : 'Analysis failed.');
       setResult(data);
       setStage('done');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'לא הצלחנו לנתח את האתר.');
+      setError(caught instanceof Error ? caught.message : 'We could not analyze this website.');
       setStage('open');
     }
   };
@@ -108,6 +121,10 @@ export default function App() {
   const reset = () => {
     setUrl(''); setResult(null); setError(''); setStage('open');
     window.setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const closeJuicer = () => {
+    setUrl(''); setResult(null); setError(''); setStage('closed'); setHovered(false);
   };
 
   const isOpen = stage !== 'closed';
@@ -122,14 +139,18 @@ export default function App() {
         <img className="asset asset--top" src="/assets/juicer-top.png" alt="" />
 
         <form className="squeeze-form" onSubmit={squeeze} aria-hidden={!isOpen}>
+          <button className="close-trigger" type="button" onClick={closeJuicer} aria-label="Close and return">
+            <X size={20} strokeWidth={2.8} />
+          </button>
           {stage === 'done' ? <div className="result-card" role="status">
             <span className="result-icon"><Check size={18} strokeWidth={3} /></span>
             <span><strong>MVP READY</strong><small>Your focused brief is squeezed and ready.</small></span>
             <button type="button" onClick={reset} aria-label="Try another URL"><RotateCcw size={18} /></button>
           </div> : <div className="input-wrap">
+            <p className="input-instruction">PASTE A PRODUCT URL — WE'LL SQUEEZE OUT THE MVP</p>
             <label className="sr-only" htmlFor="idea-url">Paste a product URL</label>
             <div className="input-row">
-              <input ref={inputRef} id="idea-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="" tabIndex={isOpen ? 0 : -1} disabled={stage === 'squeezing'} autoComplete="url" required />
+              <input ref={inputRef} id="idea-url" type="text" inputMode="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="yourproduct.com" tabIndex={isOpen ? 0 : -1} disabled={stage === 'squeezing'} autoComplete="url" required />
               {stage === 'squeezing' && <span className="loader" aria-hidden="true" />}
               <button type="submit" hidden disabled={!url.trim() || stage === 'squeezing'}>Squeeze idea</button>
             </div>
@@ -138,6 +159,7 @@ export default function App() {
         </form>
 
         <button className="juicer-trigger" onClick={openJuicer} onFocus={() => setHovered(true)} onBlur={() => setHovered(false)} aria-label="Open the juicer and try Squeeze It" tabIndex={stage === 'closed' ? 0 : -1} />
+        <span className="hover-hint" aria-hidden="true">CLICK TO SQUEEZE</span>
       </div>
 
     </section>
@@ -154,30 +176,30 @@ export default function App() {
 
       <div className="brief__signal">
         <Target size={24} />
-        <div><span>CORE VALUE</span><strong>{result.coreValue}</strong><small>למי: {result.targetUser}</small></div>
+        <div><span>CORE VALUE</span><strong>{result.coreValue}</strong><small>FOR: {result.targetUser}</small></div>
       </div>
 
       <div className="brief__grid">
         <article className="brief-card brief-card--keep">
-          <span className="brief-card__number">01</span><h3>מה חייב להישאר</h3>
+          <span className="brief-card__number">01</span><h3>WHAT MUST STAY</h3>
           <p className="brief-card__lead">{result.mvp.oneLine}</p>
           <ol>{result.mvp.mustHave.map((item) => <li key={item}>{item}</li>)}</ol>
         </article>
         <article className="brief-card brief-card--cut">
-          <span className="brief-card__number">02</span><h3><Scissors size={18} /> מה חותכים עכשיו</h3>
+          <span className="brief-card__number">02</span><h3><Scissors size={18} /> CUT FOR NOW</h3>
           <ul>{result.mvp.cut.map((item) => <li key={item}>{item}</li>)}</ul>
         </article>
         <article className="brief-card brief-card--build">
-          <span className="brief-card__number">03</span><h3>סדר בנייה</h3>
+          <span className="brief-card__number">03</span><h3>BUILD ORDER</h3>
           <ol>{result.mvp.buildOrder.map((item) => <li key={item}>{item}</li>)}</ol>
         </article>
       </div>
 
       <div className="brief__metric"><span>THE ONE METRIC</span><strong>{result.mvp.successMetric}</strong></div>
       <details className="brief__details">
-        <summary>מה זיהינו באתר + הנחות</summary>
-        <div><h3>פיצ׳רים שנצפו</h3><ul>{result.observedFeatures.map((item) => <li key={item}>{item}</li>)}</ul></div>
-        <div><h3>הנחות לבדיקה</h3><ul>{result.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <summary>OBSERVED SIGNALS + ASSUMPTIONS</summary>
+        <div><h3>OBSERVED FEATURES</h3><ul>{result.observedFeatures.map((item) => <li key={item}>{item}</li>)}</ul></div>
+        <div><h3>ASSUMPTIONS TO TEST</h3><ul>{result.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></div>
       </details>
       <div className="brief__footer"><span>ANALYZED WITH {result.model}</span><button onClick={reset}><RotateCcw size={16} /> SQUEEZE ANOTHER</button></div>
     </section>}

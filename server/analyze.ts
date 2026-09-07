@@ -137,13 +137,30 @@ function extractPageSignals(html: string, finalUrl: string) {
   };
 }
 
-function assertResult(value: unknown): asserts value is Omit<MvpBrief, 'scannedUrl' | 'model'> {
-  const item = value as Partial<MvpBrief> | null;
-  if (!item || typeof item !== 'object' || typeof item.siteName !== 'string' ||
-    !Array.isArray(item.observedFeatures) || !item.mvp || !Array.isArray(item.mvp.mustHave) ||
-    !Array.isArray(item.mvp.cut) || !Array.isArray(item.mvp.buildOrder)) {
-    throw new Error('The model returned an incomplete analysis. Please try again.');
-  }
+function normalizeResult(value: unknown, fallbackName: string): Omit<MvpBrief, 'scannedUrl' | 'model'> {
+  const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawMvp = item.mvp && typeof item.mvp === 'object' ? item.mvp as Record<string, unknown> : {};
+  const text = (input: unknown, fallback: string) => typeof input === 'string' && input.trim() ? input.trim() : fallback;
+  const list = (input: unknown, fallback: string[]) => {
+    const values = Array.isArray(input) ? input.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim())).map((entry) => entry.trim()) : [];
+    return values.length ? values : fallback;
+  };
+
+  return {
+    siteName: text(item.siteName, fallbackName || 'Scanned product'),
+    siteSummary: text(item.siteSummary, 'A product discovered from the scanned page.'),
+    coreValue: text(item.coreValue, 'Deliver the page’s primary user outcome.'),
+    targetUser: text(item.targetUser, 'The page’s primary visitor.'),
+    observedFeatures: list(item.observedFeatures, ['Public product page and primary call to action']),
+    mvp: {
+      oneLine: text(rawMvp.oneLine, 'Build only the primary value loop.'),
+      mustHave: list(rawMvp.mustHave, ['Primary input', 'Core processing', 'Useful result']),
+      cut: list(rawMvp.cut, ['Advanced settings', 'Integrations', 'Premature scaling']),
+      buildOrder: list(rawMvp.buildOrder, ['Build the core loop', 'Test with real users', 'Measure completion']),
+      successMetric: text(rawMvp.successMetric, 'Users complete the core value loop.'),
+    },
+    assumptions: list(item.assumptions, ['The public page may not expose every product capability']),
+  };
 }
 
 export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
@@ -151,7 +168,7 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
   if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured on the server.');
   const { finalUrl, html } = await fetchPage(rawUrl);
   const signals = extractPageSignals(html, finalUrl);
-  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-5';
+  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-5-mini';
 
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -167,7 +184,7 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
       messages: [
         {
           role: 'system',
-          content: 'You are a rigorous product manager who specializes in reducing large products to the smallest MVP that can be tested with real users. Return all text in English. Separate observed capabilities from assumptions. The MVP must contain only the core value loop, without nice-to-haves, advanced admin, integrations, or premature scaling.',
+          content: 'You are a rigorous product manager who reduces products to the smallest testable MVP. Return all text in English. Separate observations from assumptions. Keep every string under 16 words and the entire JSON under 1,000 tokens. Include only the core value loop; exclude nice-to-haves, advanced admin, integrations, and premature scaling.',
         },
         {
           role: 'user',
@@ -175,7 +192,8 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
         },
       ],
       response_format: { type: 'json_schema', json_schema: { name: 'minimum_mvp_brief', strict: true, schema: resultSchema } },
-      max_completion_tokens: 2200,
+      plugins: [{ id: 'response-healing' }],
+      max_completion_tokens: 1800,
     }),
   });
 
@@ -184,6 +202,5 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
   const content = payload.choices?.[0]?.message?.content;
   if (!content) throw new Error('No response was received from OpenRouter.');
   const parsed = JSON.parse(content) as unknown;
-  assertResult(parsed);
-  return { ...parsed, scannedUrl: finalUrl, model };
+  return { ...normalizeResult(parsed, signals.title), scannedUrl: finalUrl, model };
 }

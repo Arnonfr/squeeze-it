@@ -45,24 +45,25 @@ function isBlockedIp(address: string) {
 async function assertPublicUrl(rawUrl: string) {
   let parsed: URL;
   try {
-    parsed = new URL(rawUrl);
+    const normalized = /^[a-z][a-z\d+.-]*:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`;
+    parsed = new URL(normalized);
   } catch {
-    throw new Error('הכתובת שהוזנה אינה URL תקין.');
+    throw new Error('Please enter a valid URL.');
   }
-  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('אפשר לסרוק רק כתובות http או https.');
-  if (parsed.username || parsed.password) throw new Error('כתובת עם פרטי התחברות אינה נתמכת.');
-  if (['localhost', 'localhost.localdomain'].includes(parsed.hostname.toLowerCase())) throw new Error('לא ניתן לסרוק כתובת מקומית.');
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Only HTTP and HTTPS URLs can be scanned.');
+  if (parsed.username || parsed.password) throw new Error('URLs containing login credentials are not supported.');
+  if (['localhost', 'localhost.localdomain'].includes(parsed.hostname.toLowerCase())) throw new Error('Local URLs cannot be scanned.');
 
   const addresses = await lookup(parsed.hostname, { all: true });
   if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) {
-    throw new Error('לא ניתן לסרוק כתובת פרטית או פנימית.');
+    throw new Error('Private or internal URLs cannot be scanned.');
   }
   return parsed;
 }
 
 async function readLimitedBody(response: Response) {
   const declaredLength = Number(response.headers.get('content-length') || 0);
-  if (declaredLength > MAX_PAGE_BYTES) throw new Error('העמוד גדול מדי לסריקה מהירה.');
+  if (declaredLength > MAX_PAGE_BYTES) throw new Error('This page is too large for a quick scan.');
   if (!response.body) return '';
 
   const reader = response.body.getReader();
@@ -74,7 +75,7 @@ async function readLimitedBody(response: Response) {
     size += value.byteLength;
     if (size > MAX_PAGE_BYTES) {
       await reader.cancel();
-      throw new Error('העמוד גדול מדי לסריקה מהירה.');
+      throw new Error('This page is too large for a quick scan.');
     }
     chunks.push(value);
   }
@@ -94,18 +95,18 @@ async function fetchPage(startUrl: string) {
     });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
-      if (!location) throw new Error('האתר החזיר הפניה לא תקינה.');
+      if (!location) throw new Error('The website returned an invalid redirect.');
       current = await assertPublicUrl(new URL(location, current).toString());
       continue;
     }
-    if (!response.ok) throw new Error(`האתר החזיר שגיאה ${response.status}.`);
+    if (!response.ok) throw new Error(`The website returned error ${response.status}.`);
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('text/html') && !contentType.includes('application/xhtml+xml')) {
-      throw new Error('הקישור אינו מוביל לעמוד HTML.');
+      throw new Error('This URL does not point to an HTML page.');
     }
     return { finalUrl: current.toString(), html: await readLimitedBody(response) };
   }
-  throw new Error('האתר ביצע יותר מדי הפניות.');
+  throw new Error('The website redirected too many times.');
 }
 
 function decodeEntities(value: string) {
@@ -136,21 +137,38 @@ function extractPageSignals(html: string, finalUrl: string) {
   };
 }
 
-function assertResult(value: unknown): asserts value is Omit<MvpBrief, 'scannedUrl' | 'model'> {
-  const item = value as Partial<MvpBrief> | null;
-  if (!item || typeof item !== 'object' || typeof item.siteName !== 'string' ||
-    !Array.isArray(item.observedFeatures) || !item.mvp || !Array.isArray(item.mvp.mustHave) ||
-    !Array.isArray(item.mvp.cut) || !Array.isArray(item.mvp.buildOrder)) {
-    throw new Error('המודל החזיר ניתוח חלקי. נסו שוב.');
-  }
+function normalizeResult(value: unknown, fallbackName: string): Omit<MvpBrief, 'scannedUrl' | 'model'> {
+  const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawMvp = item.mvp && typeof item.mvp === 'object' ? item.mvp as Record<string, unknown> : {};
+  const text = (input: unknown, fallback: string) => typeof input === 'string' && input.trim() ? input.trim() : fallback;
+  const list = (input: unknown, fallback: string[]) => {
+    const values = Array.isArray(input) ? input.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim())).map((entry) => entry.trim()) : [];
+    return values.length ? values : fallback;
+  };
+
+  return {
+    siteName: text(item.siteName, fallbackName || 'Scanned product'),
+    siteSummary: text(item.siteSummary, 'A product discovered from the scanned page.'),
+    coreValue: text(item.coreValue, 'Deliver the page’s primary user outcome.'),
+    targetUser: text(item.targetUser, 'The page’s primary visitor.'),
+    observedFeatures: list(item.observedFeatures, ['Public product page and primary call to action']),
+    mvp: {
+      oneLine: text(rawMvp.oneLine, 'Build only the primary value loop.'),
+      mustHave: list(rawMvp.mustHave, ['Primary input', 'Core processing', 'Useful result']),
+      cut: list(rawMvp.cut, ['Advanced settings', 'Integrations', 'Premature scaling']),
+      buildOrder: list(rawMvp.buildOrder, ['Build the core loop', 'Test with real users', 'Measure completion']),
+      successMetric: text(rawMvp.successMetric, 'Users complete the core value loop.'),
+    },
+    assumptions: list(item.assumptions, ['The public page may not expose every product capability']),
+  };
 }
 
 export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OPENROUTER_API_KEY לא הוגדר בשרת.');
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured on the server.');
   const { finalUrl, html } = await fetchPage(rawUrl);
   const signals = extractPageSignals(html, finalUrl);
-  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-5';
+  const model = process.env.OPENROUTER_MODEL || 'openai/gpt-5-mini';
 
   const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
@@ -166,23 +184,23 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
       messages: [
         {
           role: 'system',
-          content: 'אתה מנהל מוצר קשוח שמתמחה בהפיכת מוצרים גדולים ל-MVP הזעיר ביותר שאפשר לבדוק עם משתמשים אמיתיים. החזר את כל הטקסט בעברית. הפרד בין יכולות שנצפו בפועל לבין הנחות. ה-MVP חייב להכיל רק את לולאת הערך המרכזית, בלי nice-to-have, אדמין מתקדם, אינטגרציות או סקייל מוקדם.',
+          content: 'You are a rigorous product manager who reduces products to the smallest testable MVP. Return all text in English. Separate observations from assumptions. Keep every string under 16 words and the entire JSON under 1,000 tokens. Include only the core value loop; exclude nice-to-haves, advanced admin, integrations, and premature scaling.',
         },
         {
           role: 'user',
-          content: `נתח את אותות העמוד הבאים. זהה את המוצר והפיצ'רים הנראים בו, ואז הצע את המינימום של המינימום ל-MVP בר-בדיקה. אל תמציא פיצ'רים שלא נצפו; אם חסר מידע, ציין זאת בהנחות.\n\n${JSON.stringify(signals)}`,
+          content: `Analyze the following page signals. Identify the product and its visible features, then propose the smallest testable MVP. Do not invent features that were not observed; list missing information as assumptions.\n\n${JSON.stringify(signals)}`,
         },
       ],
       response_format: { type: 'json_schema', json_schema: { name: 'minimum_mvp_brief', strict: true, schema: resultSchema } },
-      max_completion_tokens: 2200,
+      plugins: [{ id: 'response-healing' }],
+      max_completion_tokens: 1800,
     }),
   });
 
   const payload = await response.json() as { error?: { message?: string }; choices?: Array<{ message?: { content?: string } }> };
-  if (!response.ok) throw new Error(payload.error?.message || `OpenRouter החזיר שגיאה ${response.status}.`);
+  if (!response.ok) throw new Error(payload.error?.message || `OpenRouter returned error ${response.status}.`);
   const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error('לא התקבלה תשובה מ-OpenRouter.');
+  if (!content) throw new Error('No response was received from OpenRouter.');
   const parsed = JSON.parse(content) as unknown;
-  assertResult(parsed);
-  return { ...parsed, scannedUrl: finalUrl, model };
+  return { ...normalizeResult(parsed, signals.title), scannedUrl: finalUrl, model };
 }

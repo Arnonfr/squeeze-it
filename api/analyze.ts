@@ -18,11 +18,11 @@ export default async function handler(request: RequestLike, response: ResponseLi
   try {
     const body = typeof request.body === 'string' ? JSON.parse(request.body) : request.body as { url?: unknown } | undefined;
     if (typeof body?.url !== 'string' || body.url.length > 2_048) {
-      return response.status(400).json({ error: 'נדרשת כתובת URL תקינה.' });
+      return response.status(400).json({ error: 'Please enter a valid URL.' });
     }
     return response.status(200).json(await analyzeWebsite(body.url));
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'הניתוח נכשל.';
-    return response.status(message.includes('לא הוגדר') ? 503 : 400).json({ error: message });
+    const message = error instanceof Error ? error.message : 'Analysis failed.';
+    return response.status(message.includes('not configured') ? 503 : 400).json({ error: message });
   }
 }

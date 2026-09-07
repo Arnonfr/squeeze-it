@@ -45,10 +45,10 @@ button { color: inherit; }
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;
 }
 .juicer-stage::after {
-  content: ''; position: absolute; z-index: 7; left: 50%; top: 76%; width: 58%; height: 12%;
+  content: ''; position: absolute; z-index: 7; left: 50%; top: 86%; width: 54%; height: 10%;
   transform: translateX(-50%); border-radius: 50%; pointer-events: none;
   background: radial-gradient(ellipse, rgba(62, 69, 0, .42) 0%, rgba(78, 75, 0, .22) 42%, rgba(78, 75, 0, 0) 73%);
-  filter: blur(10px); transition: transform .6s ease, opacity .6s ease;
+  filter: blur(9px); transition: top .6s ease, transform .6s ease, opacity .6s ease;
 }
 .asset--shadow { z-index: 10; opacity: .82; filter: contrast(1.25); transition: opacity .5s ease, transform .5s ease; }
 .asset--bottom { z-index: 30; opacity: 0; transition: opacity .24s ease, transform .55s ease; }
@@ -63,9 +63,14 @@ button { color: inherit; }
 .stage--open .asset--top, .stage--squeezing .asset--top, .stage--done .asset--top { opacity: 1; }
 .stage--open .asset--top, .stage--done .asset--top { transform: translateY(-38%); }
 .stage--open .asset--bottom, .stage--done .asset--bottom { transform: translateY(17%); }
-.stage--open .juicer-stage::after, .stage--done .juicer-stage::after { transform: translate(-50%, 9%) scaleX(1.07); opacity: .9; }
+.stage--open .juicer-stage::after, .stage--done .juicer-stage::after { top: 100%; transform: translateX(-50%) scaleX(1.07); opacity: .9; }
 .stage--squeezing .asset--top { transform: translateY(-10%); }
 .stage--squeezing .asset--bottom { transform: translateY(1%) scaleY(.96); }
+.stage--closed .juicer-stage:is(:hover, :focus-within) .asset--whole { opacity: 0; }
+.stage--closed .juicer-stage:is(:hover, :focus-within) .asset--top,
+.stage--closed .juicer-stage:is(:hover, :focus-within) .asset--bottom { opacity: 1; }
+.stage--closed .juicer-stage:is(:hover, :focus-within) .asset--top { transform: translate(1.4%, -2.8%) rotate(.7deg); }
+.stage--closed .juicer-stage:is(:hover, :focus-within) .asset--bottom { transform: translate(-1.2%, 2.2%) rotate(-.65deg); }
 
 .juicer-trigger {
   position: absolute; z-index: 70; inset: 13% 17% 8%; border: 0;
@@ -82,18 +87,35 @@ button { color: inherit; }
 .stage--open .squeeze-form, .stage--squeezing .squeeze-form, .stage--done .squeeze-form {
   opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto;
 }
+.input-instruction {
+  margin: 0 0 9px; color: #1739ef; font-family: Doto, ui-monospace, monospace;
+  font-size: 12px; font-weight: 700; letter-spacing: .035em;
+}
 .input-row {
-  display: flex; align-items: center; padding: 0; border: 0; border-bottom: 2px solid #1739ef;
+  display: flex; align-items: center; padding: 0; border: 0; border-bottom: 3px solid #1739ef;
   background: transparent; box-shadow: none;
 }
 .input-row input {
-  min-width: 0; flex: 1; height: 46px; padding: 0 2px; border: 0; outline: 0;
-  color: #1739ef; caret-color: #1739ef; background: transparent; font-size: 18px; font-weight: 700;
+  min-width: 0; flex: 1; height: 51px; padding: 0 2px; border: 0; outline: 0;
+  color: #1739ef; caret-color: #1739ef; background: transparent; font-size: 23px; font-weight: 900;
 }
-.input-row:focus-within { border-bottom-color: #1739ef; box-shadow: 0 5px 8px -8px rgba(23, 57, 239, .9); }
+.input-row input::placeholder { color: rgba(23, 57, 239, .42); }
+.input-row:focus-within { border-bottom-color: #1739ef; }
+.close-trigger {
+  position: absolute; right: -52px; top: 0; width: 38px; height: 38px; display: grid; place-items: center;
+  border: 2px solid #1739ef; border-radius: 0; color: #1739ef; background: #fffef7;
+  box-shadow: 4px 4px 0 #1739ef; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease;
+}
+.close-trigger:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #1739ef; }
+.hover-hint {
+  position: absolute; z-index: 75; left: 50%; bottom: 2%; transform: translate(-50%, 8px);
+  color: #1739ef; font-family: Doto, ui-monospace, monospace; font-size: 13px; font-weight: 700;
+  letter-spacing: .08em; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .25s ease;
+}
+.stage--closed .juicer-stage:is(:hover, :focus-within) .hover-hint { opacity: 1; transform: translate(-50%, 0); }
 .loader {
-  width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.4);
-  border-top-color: white; border-radius: 50%; animation: spin .7s linear infinite;
+  width: 18px; height: 18px; border: 2px solid rgba(23,57,239,.25);
+  border-top-color: #1739ef; border-radius: 50%; animation: spin .7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -159,7 +181,9 @@ button { color: inherit; }
   .juicer-stage { width: 92vw; }
   .cylinder { transform: scale(.82); }
   .squeeze-form { top: 49%; width: min(62%, 340px); }
-  .input-row input { height: 39px; padding: 0 2px; font-size: 14px; }
+  .input-instruction { font-size: 9px; }
+  .input-row input { height: 42px; padding: 0; font-size: 18px; }
+  .close-trigger { right: -42px; width: 32px; height: 32px; }
   .result-card { padding: 7px; gap: 8px; border-radius: 13px; }
   .result-icon { width: 32px; height: 32px; }
   .result-card small { display: none; }

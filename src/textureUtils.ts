@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-const TEXTURE_WIDTH = 2048;
+const TEXTURE_WIDTH = 4096;
 const TEXTURE_HEIGHT = 512;
 
 export async function createTextTexture() {
@@ -12,14 +12,14 @@ export async function createTextTexture() {
   if (!ctx) throw new Error('Canvas 2D is unavailable');
 
   ctx.clearRect(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
-  ctx.font = '900 120px Arial, Helvetica, sans-serif';
+  ctx.font = '700 106px Doto, ui-monospace, monospace';
   ctx.fillStyle = '#1739EF';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
 
   const rows = [
-    { text: 'CUT THE NOISE  ·  CUT THE NOISE  ·  ', y: 184 },
-    { text: 'SHIP THE MVP  ·  SHIP THE MVP  ·  ', y: 328 },
+    { text: 'CUT THE NOISE  ·  FIND THE SIGNAL  ·  CUT THE NOISE  ·  FIND THE SIGNAL  ·  ', y: 188 },
+    { text: 'SHIP THE MVP  ·  MAKE IT REAL  ·  SHIP THE MVP  ·  MAKE IT REAL  ·  ', y: 324 },
   ];
 
   rows.forEach(({ text, y }) => {

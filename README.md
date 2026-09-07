@@ -13,4 +13,4 @@ Paste a public product URL, scan its visible content and features, and get the s
 3. Run the app:
    `npm run dev`
 
-The default model is `openai/gpt-5`. Override it with `OPENROUTER_MODEL` when you need a different model version.
+The default model is `openai/gpt-5-mini`, selected for serverless latency. Override it with `OPENROUTER_MODEL` when you need a different model version.

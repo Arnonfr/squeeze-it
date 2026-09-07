@@ -9,7 +9,7 @@ async function readJson(request: IncomingMessage) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > MAX_REQUEST_BYTES) throw new Error('הבקשה גדולה מדי.');
+    if (size > MAX_REQUEST_BYTES) throw new Error('The request is too large.');
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as { url?: unknown };
@@ -28,11 +28,11 @@ function middleware(request: IncomingMessage, response: ServerResponse, next: ()
   void (async () => {
     try {
       const body = await readJson(request);
-      if (typeof body.url !== 'string' || body.url.length > 2_048) return send(response, 400, { error: 'נדרשת כתובת URL תקינה.' });
+      if (typeof body.url !== 'string' || body.url.length > 2_048) return send(response, 400, { error: 'Please enter a valid URL.' });
       send(response, 200, await analyzeWebsite(body.url));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'הניתוח נכשל.';
-      send(response, message.includes('לא הוגדר') ? 503 : 400, { error: message });
+      const message = error instanceof Error ? error.message : 'Analysis failed.';
+      send(response, message.includes('not configured') ? 503 : 400, { error: message });
     }
   })();
 }
