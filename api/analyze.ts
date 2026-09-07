@@ -1,4 +1,4 @@
-import { analyzeWebsite } from '../server/analyze';
+import { analyzeWebsite } from './_analyze.js';
 
 interface RequestLike {
   method?: string;
