@@ -23,6 +23,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "server", "api", "vite.config.ts"],
+  "include": ["src", "server", "api", "netlify", "vite.config.ts"],
   "exclude": ["dist", "node_modules"]
 }
