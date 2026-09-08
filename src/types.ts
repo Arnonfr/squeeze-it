@@ -5,6 +5,7 @@ export interface MvpBrief {
   coreValue: string;
   targetUser: string;
   observedFeatures: string[];
+  featureRequests: string[];
   mvp: {
     oneLine: string;
     mustHave: string[];

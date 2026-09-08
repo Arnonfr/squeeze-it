@@ -13,22 +13,23 @@ const resultSchema = {
     siteSummary: { type: 'string' },
     coreValue: { type: 'string' },
     targetUser: { type: 'string' },
-    observedFeatures: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10 },
+    observedFeatures: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6 },
+    featureRequests: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 4 },
     mvp: {
       type: 'object',
       properties: {
         oneLine: { type: 'string' },
-        mustHave: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 },
-        cut: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 8 },
-        buildOrder: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 },
+        mustHave: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 4 },
+        cut: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 4 },
+        buildOrder: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 4 },
         successMetric: { type: 'string' },
       },
       required: ['oneLine', 'mustHave', 'cut', 'buildOrder', 'successMetric'],
       additionalProperties: false,
     },
-    assumptions: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 },
+    assumptions: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 3 },
   },
-  required: ['siteName', 'siteSummary', 'coreValue', 'targetUser', 'observedFeatures', 'mvp', 'assumptions'],
+  required: ['siteName', 'siteSummary', 'coreValue', 'targetUser', 'observedFeatures', 'featureRequests', 'mvp', 'assumptions'],
   additionalProperties: false,
 } as const;
 
@@ -152,6 +153,7 @@ function normalizeResult(value: unknown, fallbackName: string): Omit<MvpBrief, '
     coreValue: text(item.coreValue, 'Deliver the page’s primary user outcome.'),
     targetUser: text(item.targetUser, 'The page’s primary visitor.'),
     observedFeatures: list(item.observedFeatures, ['Public product page and primary call to action']),
+    featureRequests: list(item.featureRequests, ['Can we add user accounts?', 'What about advanced filters?', 'Can this have an admin dashboard?']).slice(0, 4),
     mvp: {
       oneLine: text(rawMvp.oneLine, 'Build only the primary value loop.'),
       mustHave: list(rawMvp.mustHave, ['Primary input', 'Core processing', 'Useful result']),
@@ -184,7 +186,7 @@ export async function analyzeWebsite(rawUrl: string): Promise<MvpBrief> {
       messages: [
         {
           role: 'system',
-          content: 'You are a rigorous product manager who reduces products to the smallest testable MVP. Return all text in English. Separate observations from assumptions. Keep every string under 16 words and the entire JSON under 1,000 tokens. Include only the core value loop; exclude nice-to-haves, advanced admin, integrations, and premature scaling.',
+          content: 'You are a rigorous product manager who reduces products to the smallest testable MVP. Return all text in concise English. Separate observations from assumptions. Keep every string under 12 words and the entire JSON under 750 tokens. Include only the core value loop. featureRequests must contain 3–4 plausible, playful stakeholder requests for tempting future additions, written like short spoken questions without quotation marks.',
         },
         {
           role: 'user',

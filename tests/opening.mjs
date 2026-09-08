@@ -11,17 +11,19 @@ try {
   let submittedUrl = '';
   await page.route('**/api/analyze', async (route) => {
     submittedUrl = route.request().postDataJSON().url;
+    await new Promise((resolve) => setTimeout(resolve, 2600));
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       siteName: 'Example', siteSummary: 'An example product.', coreValue: 'A clear value loop.', targetUser: 'Early users',
-      observedFeatures: ['Core flow'], assumptions: ['Demand exists'], scannedUrl: submittedUrl, model: 'test-model',
+      observedFeatures: ['Core flow'], assumptions: ['Demand exists'], featureRequests: ['Can we add profiles?', 'What about a dashboard?', 'Can it send alerts?'], scannedUrl: submittedUrl, model: 'test-model',
       mvp: { oneLine: 'Test the core loop.', mustHave: ['Core flow'], cut: ['Everything else'], buildOrder: ['Build the loop'], successMetric: 'One successful use' },
     }) });
   });
-  await page.goto('http://127.0.0.1:3000', { waitUntil: 'networkidle' });
+  await page.goto(process.env.TEST_URL || 'http://127.0.0.1:3000', { waitUntil: 'networkidle' });
   await page.screenshot({ path: '/tmp/squeeze-before.png' });
   await page.getByRole('button', { name: 'Open the juicer' }).hover();
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.hover-hint')).opacity === '1');
   assert.equal(await page.locator('.asset--top').evaluate((node) => getComputedStyle(node).opacity), '1');
+  await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector('.background-wordmark')).transform).a < .8);
   await page.screenshot({ path: '/tmp/squeeze-hover.png' });
   await page.getByRole('button', { name: 'Open the juicer' }).click();
   await page.waitForSelector('.stage--open');
@@ -48,7 +50,11 @@ try {
   await page.screenshot({ path: '/tmp/squeeze-after.png' });
   await page.locator('#idea-url').fill('example.com');
   await page.locator('#idea-url').press('Enter');
+  await page.waitForSelector('.analysis-feed');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: '/tmp/squeeze-analyzing.png' });
   await page.waitForSelector('.stage--done');
+  await page.screenshot({ path: '/tmp/squeeze-result.png', fullPage: true });
   assert.equal(submittedUrl, 'https://example.com');
   await page.getByRole('button', { name: 'Close and return' }).click();
   await page.waitForSelector('.stage--closed');

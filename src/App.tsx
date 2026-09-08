@@ -2,12 +2,20 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { animate, useReducedMotion } from 'framer-motion';
 import * as THREE from 'three';
-import { Check, ExternalLink, RotateCcw, Scissors, Target, X } from 'lucide-react';
+import { Check, ExternalLink, RotateCcw, X } from 'lucide-react';
 import { CylinderHalf } from './CylinderHalf';
 import { createTextTexture } from './textureUtils';
 import type { ApiError, MvpBrief } from './types';
 
 type Stage = 'closed' | 'open' | 'squeezing' | 'done';
+
+const analysisSteps = [
+  ['READING THE PAGE', 'Collecting visible copy, actions and product signals.'],
+  ['MAPPING THE PRODUCT', 'Identifying the audience and the central value loop.'],
+  ['SPOTTING FEATURE CREEP', 'Separating proof-of-value from tempting extras.'],
+  ['EXTRACTING THE MVP', 'Keeping only what the first useful version needs.'],
+  ['COMPRESSING THE BRIEF', 'Turning the findings into a short build sequence.'],
+] as const;
 
 function normalizeUrl(value: string) {
   const trimmed = value.trim();
@@ -41,6 +49,7 @@ export default function App() {
   const [url, setUrl] = useState('');
   const [result, setResult] = useState<MvpBrief | null>(null);
   const [error, setError] = useState('');
+  const [analysisStep, setAnalysisStep] = useState(0);
   const prefersReducedMotion = useReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLElement>(null);
@@ -58,7 +67,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const compressed = hovered || stage === 'squeezing';
+    const compressed = stage === 'squeezing';
     const scaleAnimation = animate(scaleX.current, compressed ? 0.72 : 1, {
       type: 'tween', ease: prefersReducedMotion ? 'linear' : [0.2, 0.8, 0.2, 1],
       duration: prefersReducedMotion ? 0.01 : 0.55,
@@ -70,6 +79,14 @@ export default function App() {
     });
     return () => { scaleAnimation.stop(); speedAnimation.stop(); };
   }, [hovered, stage, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (stage !== 'squeezing') { setAnalysisStep(0); return; }
+    const timer = window.setInterval(() => {
+      setAnalysisStep((current) => Math.min(current + 1, analysisSteps.length - 1));
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, [stage]);
 
   useEffect(() => {
     let frame = 0;
@@ -130,7 +147,8 @@ export default function App() {
   const isOpen = stage !== 'closed';
 
   return <main className="app-shell">
-    <section className={`hero stage--${stage}`} aria-label="Squeeze an idea into an MVP">
+    <section className={`hero stage--${stage} ${hovered && stage === 'closed' ? 'is-hovered' : ''}`} aria-label="Squeeze an idea into an MVP">
+      <img className="background-wordmark" src="/assets/background-text-squeeze-it.png" alt="" aria-hidden="true" />
       <div className="juicer-stage" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
         {texture && <TextCylinder texture={texture} scaleX={scaleX} rotationY={rotationY} />}
         <img className="asset asset--shadow" src="/assets/shadow.png" alt="" />
@@ -162,9 +180,21 @@ export default function App() {
         <span className="hover-hint" aria-hidden="true">CLICK TO SQUEEZE</span>
       </div>
 
+      {stage === 'squeezing' && <div className="analysis-feed" role="status" aria-live="polite">
+        <div className="analysis-feed__rail" aria-hidden="true">
+          {analysisSteps.map((_, index) => <span key={index} className={index <= analysisStep ? 'is-active' : ''} />)}
+        </div>
+        <div className="analysis-feed__copy">
+          <span>{String(analysisStep + 1).padStart(2, '0')} / {String(analysisSteps.length).padStart(2, '0')}</span>
+          <strong>{analysisSteps[analysisStep][0]}</strong>
+          <p>{analysisSteps[analysisStep][1]}</p>
+        </div>
+      </div>}
+
     </section>
 
     {result && <section className="brief" ref={resultRef} aria-labelledby="brief-title">
+      <img className="brief__juicer" src="/assets/juicer-whole.png" alt="" aria-hidden="true" />
       <div className="brief__header">
         <div>
           <span className="brief__kicker">YOUR MINIMUM VIABLE BRIEF</span>
@@ -175,32 +205,32 @@ export default function App() {
       </div>
 
       <div className="brief__signal">
-        <Target size={24} />
-        <div><span>CORE VALUE</span><strong>{result.coreValue}</strong><small>FOR: {result.targetUser}</small></div>
+        <span>THE ONE THING WORTH KEEPING</span>
+        <strong>{result.coreValue}</strong>
+        <small>For {result.targetUser}</small>
       </div>
 
       <div className="brief__grid">
-        <article className="brief-card brief-card--keep">
-          <span className="brief-card__number">01</span><h3>WHAT MUST STAY</h3>
+        <article className="brief-column">
+          <span className="brief-column__number">01</span><h3>KEEP</h3>
           <p className="brief-card__lead">{result.mvp.oneLine}</p>
-          <ol>{result.mvp.mustHave.map((item) => <li key={item}>{item}</li>)}</ol>
+          <ul>{result.mvp.mustHave.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ul>
         </article>
-        <article className="brief-card brief-card--cut">
-          <span className="brief-card__number">02</span><h3><Scissors size={18} /> CUT FOR NOW</h3>
-          <ul>{result.mvp.cut.map((item) => <li key={item}>{item}</li>)}</ul>
+        <article className="brief-column">
+          <span className="brief-column__number">02</span><h3>CUT</h3>
+          <ul>{result.mvp.cut.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ul>
         </article>
-        <article className="brief-card brief-card--build">
-          <span className="brief-card__number">03</span><h3>BUILD ORDER</h3>
-          <ol>{result.mvp.buildOrder.map((item) => <li key={item}>{item}</li>)}</ol>
+        <article className="brief-column">
+          <span className="brief-column__number">03</span><h3>BUILD</h3>
+          <ol>{result.mvp.buildOrder.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ol>
         </article>
       </div>
 
+      <div className="brief__temptations">
+        <div><span>THE TEMPTATIONS</span><h3>Things someone will definitely ask you to add</h3></div>
+        <div className="quote-cloud">{result.featureRequests.slice(0, 4).map((item) => <blockquote key={item}>“{item}”</blockquote>)}</div>
+      </div>
       <div className="brief__metric"><span>THE ONE METRIC</span><strong>{result.mvp.successMetric}</strong></div>
-      <details className="brief__details">
-        <summary>OBSERVED SIGNALS + ASSUMPTIONS</summary>
-        <div><h3>OBSERVED FEATURES</h3><ul>{result.observedFeatures.map((item) => <li key={item}>{item}</li>)}</ul></div>
-        <div><h3>ASSUMPTIONS TO TEST</h3><ul>{result.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></div>
-      </details>
       <div className="brief__footer"><span>ANALYZED WITH {result.model}</span><button onClick={reset}><RotateCcw size={16} /> SQUEEZE ANOTHER</button></div>
     </section>}
   </main>;
